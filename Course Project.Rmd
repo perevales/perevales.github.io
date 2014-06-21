@@ -1,0 +1,102 @@
+Course Project: Writeup
+========================================================
+
+```{r}
+# Read data
+data<-read.csv("pml-training.csv",na.strings=c("NA",""))
+```
+
+```{r}
+# Read test data for submission of Course Project
+test_project<-read.csv("pml-testing.csv",na.strings=c("NA",""))
+```
+
+```{r}
+# Load packages
+library(gbm)
+library(caret)
+library(e1071)
+```
+
+```{r}
+# Split data into training and testing sets
+trainingRows <- createDataPartition(data$classe, 
+                                    p = .80,list= FALSE)
+
+data_train <- data[trainingRows, ]
+data_test <- data[-trainingRows, ]
+```
+
+```{r}
+# Delete variables with more than 80% of observations as missing values
+lim <- nrow(data_train)*0.8
+data_train <- data_train[,colSums(is.na(data_train)) < lim]
+colSums(is.na(data_train))
+```
+
+```{r}
+# Filter for near-zero variance predictors
+nearz <- nearZeroVar(data_train)
+nearz
+colnames(data_train)[c(nearz)]
+preproc_data <- data_train [,-nearz]
+```
+
+```{r}
+# Delete other variable not related to the outcome
+for.gbm <- within(preproc_data, {
+  X               <- NULL  # Delete
+  timestamp       <- NULL
+  user_name       <- NULL
+   })
+```
+
+```{r}
+# Set fitControl for 4-fold cros-validation
+# 10-fold CV and repeted sampling takes too long in computing time
+fitControl <- trainControl(
+  method = "cv",
+  number = 4)
+```
+
+```{r}
+# Tune gbm model (boosted regression trees)
+set.seed(1)
+gbmFit1 <- train(classe ~ ., data = for.gbm,
+                 method = "gbm",
+                 trControl = fitControl,
+                 verbose = FALSE)
+
+gbmFit1
+```
+
+Best model is built with 150 tree and 3 as interaction depth.
+Accuracy for best model is 100% (calculated with 4-fold CV)
+
+```{r fig.width=7, fig.height=6}
+# Plotting the results
+library(lattice)
+trellis.par.set(caretTheme())
+plot(gbmFit1)
+```
+
+```{r}
+# Predicting on test data
+predtest <- predict.train (gbmFit1, newdata=data_test)
+table(predtest)
+```
+
+```{r}
+# Confussion Matrix
+# Accuracy on test data is 0.997 (99.7%)
+confusionMatrix(data_test$classe, predtest)
+```
+
+```{r}
+# Predict on data for Project Submission
+predtest_project <- predict.train (gbmFit1, newdata=test_project)
+predtest_project
+table(predtest_project)
+
+```
+
